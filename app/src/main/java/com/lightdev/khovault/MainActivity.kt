@@ -6,6 +6,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -36,13 +37,9 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
-import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
@@ -59,7 +56,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
@@ -81,14 +77,14 @@ import java.time.format.DateTimeFormatter
 import java.util.Locale
 import kotlin.math.roundToInt
 
-private val Navy = Color(0xFF07111F)
-private val Panel = Color(0xFF101D2E)
-private val PanelSoft = Color(0xFF16263A)
-private val Cyan = Color(0xFF29D8FF)
-private val Gold = Color(0xFFF7C948)
-private val Mint = Color(0xFF64E6A5)
-private val Coral = Color(0xFFFF7085)
-private val Muted = Color(0xFF91A6BD)
+private val Ink = Color(0xFF0B0C0F)
+private val SurfaceRaised = Color(0xFF15171B)
+private val SurfaceSoft = Color(0xFF1C1F24)
+private val TextPrimary = Color(0xFFF4F2EC)
+private val Muted = Color(0xFF929397)
+private val Accent = Color(0xFF9CDDE8)
+private val Loss = Color(0xFFE6A4A0)
+private val Hairline = Color(0xFF292C31)
 
 data class DiamondEntry(
     val id: Long,
@@ -103,11 +99,10 @@ enum class MembershipKind(
     val instant: Int,
     val daily: Int,
     val days: Int,
-    val total: Int,
-    val accent: Color
+    val total: Int
 ) {
-    WEEKLY("Thẻ Tuần", 100, 50, 7, 450, Cyan),
-    MONTHLY("Thẻ Tháng", 500, 70, 30, 2600, Gold)
+    WEEKLY("Thẻ Tuần", 100, 50, 7, 450),
+    MONTHLY("Thẻ Tháng", 500, 70, 30, 2600)
 }
 
 data class Membership(
@@ -247,8 +242,12 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-private enum class AppTab(val label: String, val symbol: String) {
-    HOME("Tổng quan", "◆"), HISTORY("Lịch sử", "≡"), CARDS("Thẻ", "▣")
+private enum class LineIcon { HOME, HISTORY, CARD, PLUS, MINUS, CLOSE }
+
+private enum class AppTab(val label: String, val icon: LineIcon) {
+    HOME("Trang chủ", LineIcon.HOME),
+    HISTORY("Lịch sử", LineIcon.HISTORY),
+    CARDS("Thẻ", LineIcon.CARD)
 }
 
 @Composable
@@ -258,72 +257,48 @@ private fun DiamondVaultApp() {
     var snapshot by remember { mutableStateOf(store.load()) }
     var tab by remember { mutableStateOf(AppTab.HOME) }
     var showAdd by remember { mutableStateOf(false) }
+    var addAsIncome by remember { mutableStateOf(true) }
     var showGoal by remember { mutableStateOf(false) }
 
     MaterialTheme(
         colorScheme = darkColorScheme(
-            primary = Cyan,
-            secondary = Gold,
-            background = Navy,
-            surface = Panel,
-            onBackground = Color.White,
-            onSurface = Color.White
+            primary = Accent,
+            secondary = TextPrimary,
+            background = Ink,
+            surface = SurfaceRaised,
+            onBackground = TextPrimary,
+            onSurface = TextPrimary
         )
     ) {
-        Surface(Modifier.fillMaxSize(), color = Navy) {
+        Surface(Modifier.fillMaxSize(), color = Ink) {
             Scaffold(
-                containerColor = Color.Transparent,
+                containerColor = Ink,
                 contentWindowInsets = WindowInsets.safeDrawing,
                 topBar = { AppHeader() },
-                bottomBar = {
-                    NavigationBar(
-                        modifier = Modifier.navigationBarsPadding(),
-                        containerColor = Panel,
-                        tonalElevation = 0.dp
-                    ) {
-                        AppTab.entries.forEach { item ->
-                            NavigationBarItem(
-                                selected = tab == item,
-                                onClick = { tab = item },
-                                icon = { Text(item.symbol, fontSize = 20.sp, fontWeight = FontWeight.Black) },
-                                label = { Text(item.label) },
-                                colors = NavigationBarItemDefaults.colors(
-                                    selectedIconColor = Navy,
-                                    selectedTextColor = Cyan,
-                                    indicatorColor = Cyan,
-                                    unselectedIconColor = Muted,
-                                    unselectedTextColor = Muted
-                                )
-                            )
-                        }
-                    }
-                },
-                floatingActionButton = {
-                    if (tab != AppTab.CARDS) {
-                        FloatingActionButton(
-                            onClick = { showAdd = true },
-                            containerColor = Cyan,
-                            contentColor = Navy,
-                            shape = CircleShape
-                        ) { Text("+", fontWeight = FontWeight.Bold, fontSize = 28.sp) }
-                    }
-                }
+                bottomBar = { PremiumNavigation(tab = tab, onSelect = { tab = it }) }
             ) { padding ->
                 Box(
                     Modifier
                         .fillMaxSize()
-                        .background(Brush.verticalGradient(listOf(Navy, Color(0xFF0B1625), Navy)))
                         .padding(padding)
                 ) {
                     when (tab) {
                         AppTab.HOME -> Dashboard(
                             snapshot = snapshot,
                             onGoalClick = { showGoal = true },
+                            onAdd = { income ->
+                                addAsIncome = income
+                                showAdd = true
+                            },
                             onClaim = { snapshot = store.claim(snapshot, it, LocalDate.now()) },
                             onSeeCards = { tab = AppTab.CARDS }
                         )
                         AppTab.HISTORY -> History(
                             entries = snapshot.entries,
+                            onAdd = {
+                                addAsIncome = true
+                                showAdd = true
+                            },
                             onRemove = { snapshot = store.remove(snapshot, it) }
                         )
                         AppTab.CARDS -> Memberships(
@@ -338,6 +313,7 @@ private fun DiamondVaultApp() {
 
         if (showAdd) {
             AddEntryDialog(
+                initialIncome = addAsIncome,
                 onDismiss = { showAdd = false },
                 onSave = { amount, title, note ->
                     snapshot = store.add(snapshot, amount, title, note)
@@ -363,22 +339,60 @@ private fun AppHeader() {
     Row(
         Modifier
             .fillMaxWidth()
-            .background(Navy.copy(alpha = .96f))
             .statusBarsPadding()
-            .padding(horizontal = 20.dp, vertical = 14.dp),
+            .padding(horizontal = 22.dp, vertical = 16.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
+        DiamondMark(24.dp)
+        Spacer(Modifier.width(10.dp))
+        Text("KIM CƯƠNG", fontWeight = FontWeight.SemiBold, letterSpacing = 2.2.sp, fontSize = 14.sp)
+        Spacer(Modifier.weight(1f))
         Box(
             Modifier
-                .size(44.dp)
-                .clip(RoundedCornerShape(14.dp))
-                .background(Brush.linearGradient(listOf(Cyan.copy(.25f), Gold.copy(.20f)))),
-            contentAlignment = Alignment.Center
-        ) { DiamondMark(26.dp) }
-        Spacer(Modifier.width(12.dp))
-        Column {
-            Text("KHO KIM CƯƠNG", fontWeight = FontWeight.Black, letterSpacing = 1.5.sp)
-            Text("Gọn nhẹ • riêng tư • offline", color = Muted, fontSize = 12.sp)
+                .clip(CircleShape)
+                .background(SurfaceRaised)
+                .padding(horizontal = 10.dp, vertical = 6.dp)
+        ) {
+            Text("OFFLINE", color = Muted, fontSize = 9.sp, letterSpacing = 1.4.sp, fontWeight = FontWeight.Medium)
+        }
+    }
+}
+
+@Composable
+private fun PremiumNavigation(tab: AppTab, onSelect: (AppTab) -> Unit) {
+    Box(
+        Modifier
+            .fillMaxWidth()
+            .navigationBarsPadding()
+            .padding(horizontal = 18.dp, vertical = 10.dp)
+    ) {
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(24.dp))
+                .background(SurfaceRaised)
+                .padding(6.dp),
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            AppTab.entries.forEach { item ->
+                val selected = tab == item
+                Row(
+                    Modifier
+                        .weight(1f)
+                        .clip(RoundedCornerShape(18.dp))
+                        .background(if (selected) SurfaceSoft else Color.Transparent)
+                        .clickable { onSelect(item) }
+                        .padding(vertical = 11.dp),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    AppLineIcon(item.icon, if (selected) Accent else Muted, 19.dp)
+                    if (selected) {
+                        Spacer(Modifier.width(8.dp))
+                        Text(item.label, color = TextPrimary, fontSize = 12.sp, fontWeight = FontWeight.Medium)
+                    }
+                }
+            }
         }
     }
 }
@@ -387,6 +401,7 @@ private fun AppHeader() {
 private fun Dashboard(
     snapshot: AppSnapshot,
     onGoalClick: () -> Unit,
+    onAdd: (Boolean) -> Unit,
     onClaim: (Long) -> Unit,
     onSeeCards: () -> Unit
 ) {
@@ -398,25 +413,21 @@ private fun Dashboard(
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(18.dp, 14.dp, 18.dp, 110.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp)
+        contentPadding = PaddingValues(22.dp, 12.dp, 22.dp, 26.dp),
+        verticalArrangement = Arrangement.spacedBy(22.dp)
     ) {
-        item { BalanceCard(balance, received, spent) }
-        item {
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                MiniStat("Chuỗi ngày", "$streak ngày", "🔥", Gold, Modifier.weight(1f))
-                MiniStat("Giao dịch", snapshot.entries.size.toString(), "✦", Cyan, Modifier.weight(1f))
-            }
-        }
+        item { BalanceHero(balance) }
+        item { QuickActions(onAdd) }
+        item { SummaryStrip(received, spent, streak) }
         item { GoalCard(balance, snapshot.goal, onGoalClick) }
         item {
-            SectionTitle("Nhận KC hôm nay", if (active.isEmpty()) "Xem thẻ" else null, onSeeCards)
+            SectionTitle("Hôm nay", if (active.isEmpty()) "Xem thẻ" else null, onSeeCards)
         }
         if (active.isEmpty()) {
             item {
                 EmptyCard(
                     title = "Chưa có thẻ hoạt động",
-                    message = "Kích hoạt Thẻ Tuần hoặc Thẻ Tháng để không quên nhận KC mỗi ngày.",
+                    message = "Theo dõi Thẻ Tuần hoặc Thẻ Tháng và ghi nhận phần thưởng mỗi ngày.",
                     action = "Khám phá thẻ",
                     onClick = onSeeCards
                 )
@@ -428,7 +439,7 @@ private fun Dashboard(
         }
         item { SectionTitle("Gần đây") }
         if (snapshot.entries.isEmpty()) {
-            item { EmptyCard("Kho đang trống", "Chạm nút + để ghi lần nạp hoặc chi KC đầu tiên.") }
+            item { EmptyCard("Chưa có dữ liệu", "Ghi lần nhận hoặc chi Kim Cương đầu tiên.") }
         } else {
             items(snapshot.entries.take(4), key = { it.id }) { EntryRow(it) }
         }
@@ -436,67 +447,61 @@ private fun Dashboard(
 }
 
 @Composable
-private fun BalanceCard(balance: Int, received: Int, spent: Int) {
-    Card(
-        shape = RoundedCornerShape(28.dp),
-        colors = CardDefaults.cardColors(containerColor = Panel),
-        modifier = Modifier.fillMaxWidth()
+private fun BalanceHero(balance: Int) {
+    Column(Modifier.fillMaxWidth().padding(top = 8.dp)) {
+        Text("SỐ DƯ KHẢ DỤNG", color = Muted, fontSize = 10.sp, letterSpacing = 1.8.sp)
+        Spacer(Modifier.height(10.dp))
+        Row(verticalAlignment = Alignment.Bottom) {
+            Text(formatNumber(balance), fontSize = 48.sp, lineHeight = 50.sp, fontWeight = FontWeight.Light, letterSpacing = (-1).sp)
+            Spacer(Modifier.width(9.dp))
+            Text("KC", color = Accent, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(bottom = 7.dp))
+        }
+    }
+}
+
+@Composable
+private fun QuickActions(onAdd: (Boolean) -> Unit) {
+    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        ActionPill("Ghi nhận", LineIcon.PLUS, true, Modifier.weight(1f)) { onAdd(true) }
+        ActionPill("Đã chi", LineIcon.MINUS, false, Modifier.weight(1f)) { onAdd(false) }
+    }
+}
+
+@Composable
+private fun ActionPill(label: String, icon: LineIcon, primary: Boolean, modifier: Modifier, onClick: () -> Unit) {
+    Row(
+        modifier
+            .clip(RoundedCornerShape(16.dp))
+            .background(if (primary) Accent else SurfaceRaised)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 15.dp),
+        horizontalArrangement = Arrangement.Center,
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Box(
-            Modifier
-                .fillMaxWidth()
-                .background(
-                    Brush.linearGradient(
-                        listOf(Color(0xFF10283A), Color(0xFF102033), Color(0xFF211D30)),
-                        start = Offset.Zero,
-                        end = Offset.Infinite
-                    )
-                )
-                .padding(22.dp)
-        ) {
-            Column {
-                Text("SỐ DƯ HIỆN TẠI", color = Muted, fontSize = 12.sp, letterSpacing = 1.2.sp)
-                Spacer(Modifier.height(10.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    DiamondMark(35.dp)
-                    Spacer(Modifier.width(12.dp))
-                    Text(formatNumber(balance), fontSize = 38.sp, fontWeight = FontWeight.Black)
-                    Spacer(Modifier.width(7.dp))
-                    Text("KC", color = Cyan, fontWeight = FontWeight.Bold)
-                }
-                Spacer(Modifier.height(22.dp))
-                HorizontalDivider(color = Color.White.copy(.08f))
-                Spacer(Modifier.height(16.dp))
-                Row {
-                    BalanceStat("Đã nhận", "+${formatNumber(received)}", Mint, Modifier.weight(1f))
-                    BalanceStat("Đã chi", "-${formatNumber(spent)}", Coral, Modifier.weight(1f))
-                }
-            }
-        }
+        AppLineIcon(icon, if (primary) Ink else TextPrimary, 17.dp)
+        Spacer(Modifier.width(9.dp))
+        Text(label, color = if (primary) Ink else TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
     }
 }
 
 @Composable
-private fun BalanceStat(label: String, value: String, color: Color, modifier: Modifier = Modifier) {
+private fun SummaryStrip(received: Int, spent: Int, streak: Int) {
+    Row(
+        Modifier.fillMaxWidth().padding(vertical = 2.dp),
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        SummaryItem("ĐÃ NHẬN", formatNumber(received), Modifier.weight(1f))
+        SummaryItem("ĐÃ CHI", formatNumber(spent), Modifier.weight(1f))
+        SummaryItem("CHUỖI NGÀY", streak.toString(), Modifier.weight(1f))
+    }
+}
+
+@Composable
+private fun SummaryItem(label: String, value: String, modifier: Modifier) {
     Column(modifier) {
-        Text(label, color = Muted, fontSize = 12.sp)
-        Text(value, color = color, fontWeight = FontWeight.Bold, fontSize = 19.sp)
-    }
-}
-
-@Composable
-private fun MiniStat(label: String, value: String, symbol: String, accent: Color, modifier: Modifier) {
-    Card(modifier, shape = RoundedCornerShape(20.dp), colors = CardDefaults.cardColors(Panel)) {
-        Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.size(38.dp).clip(CircleShape).background(accent.copy(.13f)), contentAlignment = Alignment.Center) {
-                Text(symbol, color = accent, fontSize = 18.sp)
-            }
-            Spacer(Modifier.width(10.dp))
-            Column {
-                Text(label, color = Muted, fontSize = 11.sp)
-                Text(value, fontWeight = FontWeight.Bold)
-            }
-        }
+        Text(label, color = Muted, fontSize = 9.sp, letterSpacing = .8.sp)
+        Spacer(Modifier.height(5.dp))
+        Text(value, color = TextPrimary, fontSize = 16.sp, fontWeight = FontWeight.Medium)
     }
 }
 
@@ -505,27 +510,27 @@ private fun GoalCard(balance: Int, goal: Int, onClick: () -> Unit) {
     val progress = DiamondMath.goalProgress(balance, goal)
     Card(
         Modifier.fillMaxWidth().clickable(onClick = onClick),
-        shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(Panel)
+        shape = RoundedCornerShape(18.dp),
+        colors = CardDefaults.cardColors(SurfaceRaised),
+        border = BorderStroke(1.dp, Hairline)
     ) {
         Column(Modifier.padding(18.dp)) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Column {
-                    Text("Mục tiêu tiếp theo", fontWeight = FontWeight.Bold)
-                    Text("${formatNumber(balance.coerceAtLeast(0))} / ${formatNumber(goal)} KC", color = Muted, fontSize = 13.sp)
+                    Text("Mục tiêu", fontWeight = FontWeight.Medium, fontSize = 14.sp)
+                    Spacer(Modifier.height(3.dp))
+                    Text("${formatNumber(balance.coerceAtLeast(0))} / ${formatNumber(goal)} KC", color = Muted, fontSize = 12.sp)
                 }
-                Text("${(progress * 100).roundToInt()}%", color = Gold, fontWeight = FontWeight.Black, fontSize = 20.sp)
+                Text("${(progress * 100).roundToInt()}%", color = Accent, fontWeight = FontWeight.Medium, fontSize = 18.sp)
             }
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(15.dp))
             LinearProgressIndicator(
                 progress = { progress },
-                modifier = Modifier.fillMaxWidth().height(9.dp).clip(CircleShape),
-                color = Gold,
-                trackColor = Color.White.copy(.08f),
+                modifier = Modifier.fillMaxWidth().height(3.dp).clip(CircleShape),
+                color = Accent,
+                trackColor = Hairline,
                 strokeCap = StrokeCap.Round
             )
-            Spacer(Modifier.height(8.dp))
-            Text("Chạm để đổi mục tiêu", color = Muted, fontSize = 11.sp)
         }
     }
 }
@@ -533,19 +538,19 @@ private fun GoalCard(balance: Int, goal: Int, onClick: () -> Unit) {
 @Composable
 private fun SectionTitle(title: String, action: String? = null, onClick: () -> Unit = {}) {
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-        Text(title, fontWeight = FontWeight.Black, fontSize = 19.sp)
-        if (action != null) Text(action, color = Cyan, fontSize = 13.sp, modifier = Modifier.clickable(onClick = onClick))
+        Text(title, fontWeight = FontWeight.Medium, fontSize = 17.sp)
+        if (action != null) Text(action, color = Accent, fontSize = 12.sp, modifier = Modifier.clickable(onClick = onClick).padding(4.dp))
     }
 }
 
 @Composable
 private fun EmptyCard(title: String, message: String, action: String? = null, onClick: () -> Unit = {}) {
-    Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp), colors = CardDefaults.cardColors(Panel)) {
-        Column(Modifier.padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-            DiamondMark(32.dp, muted = true)
-            Spacer(Modifier.height(10.dp))
-            Text(title, fontWeight = FontWeight.Bold)
-            Text(message, color = Muted, fontSize = 13.sp, textAlign = TextAlign.Center, modifier = Modifier.padding(top = 5.dp))
+    Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(18.dp), colors = CardDefaults.cardColors(SurfaceRaised), border = BorderStroke(1.dp, Hairline)) {
+        Column(Modifier.padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+            DiamondMark(26.dp, muted = true)
+            Spacer(Modifier.height(13.dp))
+            Text(title, fontWeight = FontWeight.Medium, fontSize = 14.sp)
+            Text(message, color = Muted, fontSize = 12.sp, lineHeight = 18.sp, textAlign = TextAlign.Center, modifier = Modifier.padding(top = 6.dp))
             if (action != null) TextButton(onClick = onClick) { Text(action) }
         }
     }
@@ -555,70 +560,85 @@ private fun EmptyCard(title: String, message: String, action: String? = null, on
 private fun CompactClaimCard(membership: Membership, onClaim: (Long) -> Unit) {
     val today = LocalDate.now()
     val claimed = membership.hasClaimed(today)
-    Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp), colors = CardDefaults.cardColors(Panel)) {
+    Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(18.dp), colors = CardDefaults.cardColors(SurfaceRaised), border = BorderStroke(1.dp, Hairline)) {
         Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.size(48.dp).clip(RoundedCornerShape(16.dp)).background(membership.kind.accent.copy(.12f)), contentAlignment = Alignment.Center) {
-                Text("+${membership.kind.daily}", color = membership.kind.accent, fontWeight = FontWeight.Black)
+            Box(Modifier.size(44.dp).clip(CircleShape).background(SurfaceSoft), contentAlignment = Alignment.Center) {
+                Text("+${membership.kind.daily}", color = Accent, fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
             }
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
-                Text(membership.kind.label, fontWeight = FontWeight.Bold)
+                Text(membership.kind.label, fontWeight = FontWeight.Medium, fontSize = 14.sp)
                 Text("${membership.claimedEpochDays.size}/${membership.kind.days} ngày đã nhận", color = Muted, fontSize = 12.sp)
             }
             Button(
                 onClick = { onClaim(membership.id) },
                 enabled = !claimed,
-                colors = ButtonDefaults.buttonColors(containerColor = membership.kind.accent, contentColor = Navy),
-                contentPadding = PaddingValues(horizontal = 14.dp)
-            ) { Text(if (claimed) "Đã nhận" else "Nhận", fontWeight = FontWeight.Bold) }
+                colors = ButtonDefaults.buttonColors(containerColor = Accent, contentColor = Ink, disabledContainerColor = SurfaceSoft, disabledContentColor = Muted),
+                contentPadding = PaddingValues(horizontal = 14.dp),
+                shape = RoundedCornerShape(12.dp)
+            ) { Text(if (claimed) "Đã nhận" else "Nhận", fontWeight = FontWeight.SemiBold, fontSize = 12.sp) }
         }
     }
 }
 
 @Composable
-private fun History(entries: List<DiamondEntry>, onRemove: (Long) -> Unit) {
+private fun History(entries: List<DiamondEntry>, onAdd: () -> Unit, onRemove: (Long) -> Unit) {
     LazyColumn(
         Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(18.dp, 14.dp, 18.dp, 100.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp)
+        contentPadding = PaddingValues(22.dp, 12.dp, 22.dp, 26.dp),
+        verticalArrangement = Arrangement.spacedBy(0.dp)
     ) {
         item {
-            Text("Lịch sử Kim Cương", fontWeight = FontWeight.Black, fontSize = 25.sp)
-            Text("Mọi dữ liệu chỉ nằm trên thiết bị này.", color = Muted, fontSize = 13.sp)
-            Spacer(Modifier.height(8.dp))
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                Column {
+                    Text("Lịch sử", fontWeight = FontWeight.Light, fontSize = 30.sp)
+                    Text("Chỉ lưu trên thiết bị", color = Muted, fontSize = 12.sp)
+                }
+                Box(Modifier.size(42.dp).clip(CircleShape).background(SurfaceRaised).clickable(onClick = onAdd), contentAlignment = Alignment.Center) {
+                    AppLineIcon(LineIcon.PLUS, Accent, 18.dp)
+                }
+            }
+            Spacer(Modifier.height(24.dp))
         }
         if (entries.isEmpty()) item { EmptyCard("Chưa có giao dịch", "Các lần nạp, chi và nhận thẻ sẽ xuất hiện tại đây.") }
-        items(entries, key = { it.id }) { entry -> EntryRow(entry, onRemove) }
+        items(entries, key = { it.id }) { entry ->
+            EntryRow(entry, onRemove)
+            HorizontalDivider(color = Hairline)
+        }
     }
 }
 
 @Composable
 private fun EntryRow(entry: DiamondEntry, onRemove: ((Long) -> Unit)? = null) {
     val positive = entry.amount >= 0
-    Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(18.dp), colors = CardDefaults.cardColors(Panel)) {
-        Row(Modifier.padding(15.dp), verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.size(42.dp).clip(CircleShape).background((if (positive) Mint else Coral).copy(.12f)), contentAlignment = Alignment.Center) {
-                Text(if (positive) "+" else "−", color = if (positive) Mint else Coral, fontWeight = FontWeight.Black, fontSize = 22.sp)
-            }
-            Spacer(Modifier.width(12.dp))
-            Column(Modifier.weight(1f)) {
-                Text(entry.title, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Text(
-                    listOfNotNull(formatDate(entry.timestamp), entry.note.takeIf { it.isNotBlank() }).joinToString(" • "),
-                    color = Muted,
-                    fontSize = 11.sp,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
+    Row(Modifier.fillMaxWidth().padding(vertical = 15.dp), verticalAlignment = Alignment.CenterVertically) {
+        Box(Modifier.size(38.dp).clip(CircleShape).background(SurfaceRaised), contentAlignment = Alignment.Center) {
+            AppLineIcon(if (positive) LineIcon.PLUS else LineIcon.MINUS, if (positive) Accent else Loss, 16.dp)
+        }
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f)) {
+            Text(entry.title, fontWeight = FontWeight.Medium, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(
-                (if (positive) "+" else "") + formatNumber(entry.amount) + " KC",
-                color = if (positive) Mint else Coral,
-                fontWeight = FontWeight.Black
+                listOfNotNull(formatDate(entry.timestamp), entry.note.takeIf { it.isNotBlank() }).joinToString(" · "),
+                color = Muted,
+                fontSize = 10.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
-            if (onRemove != null) {
-                Spacer(Modifier.width(5.dp))
-                Text("×", color = Muted, fontSize = 22.sp, modifier = Modifier.clickable { onRemove(entry.id) }.padding(5.dp))
+        }
+        Column(horizontalAlignment = Alignment.End) {
+            Text(
+                (if (positive) "+" else "") + formatNumber(entry.amount),
+                color = if (positive) Accent else Loss,
+                fontWeight = FontWeight.Medium,
+                fontSize = 14.sp
+            )
+            Text("KC", color = Muted, fontSize = 9.sp)
+        }
+        if (onRemove != null) {
+            Spacer(Modifier.width(8.dp))
+            Box(Modifier.size(28.dp).clickable { onRemove(entry.id) }, contentAlignment = Alignment.Center) {
+                AppLineIcon(LineIcon.CLOSE, Muted, 14.dp)
             }
         }
     }
@@ -630,25 +650,27 @@ private fun Memberships(snapshot: AppSnapshot, onActivate: (MembershipKind) -> U
     val active = snapshot.memberships.filter { it.isActive(today) }
     LazyColumn(
         Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(18.dp, 14.dp, 18.dp, 100.dp),
+        contentPadding = PaddingValues(22.dp, 12.dp, 22.dp, 26.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
         item {
-            Text("Thẻ ưu đãi", fontWeight = FontWeight.Black, fontSize = 25.sp)
-            Text("Theo dõi thủ công, không đăng nhập game và không tự nạp tiền.", color = Muted, fontSize = 13.sp)
+            Text("Thẻ của bạn", fontWeight = FontWeight.Light, fontSize = 30.sp)
+            Text("Theo dõi thủ công · không liên kết tài khoản", color = Muted, fontSize = 12.sp)
+            Spacer(Modifier.height(10.dp))
         }
         items(MembershipKind.entries) { kind ->
             val current = active.firstOrNull { it.kind == kind }
             MembershipPlanCard(kind, current, onActivate, onClaim)
         }
         item {
-            Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(18.dp), colors = CardDefaults.cardColors(PanelSoft.copy(.75f))) {
+            Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(SurfaceRaised)) {
                 Column(Modifier.padding(16.dp)) {
-                    Text("Lưu ý", color = Gold, fontWeight = FontWeight.Bold)
+                    Text("THÔNG TIN", color = Accent, fontWeight = FontWeight.Medium, fontSize = 9.sp, letterSpacing = 1.3.sp)
                     Text(
                         "Mức 450/2.600 KC là cấu hình tham khảo phổ biến. Quyền lợi thực tế có thể được Garena thay đổi; hãy kiểm tra trong game trước khi mua.",
                         color = Muted,
-                        fontSize = 12.sp,
+                        fontSize = 11.sp,
+                        lineHeight = 17.sp,
                         modifier = Modifier.padding(top = 5.dp)
                     )
                 }
@@ -665,58 +687,69 @@ private fun MembershipPlanCard(
     onClaim: (Long) -> Unit
 ) {
     val today = LocalDate.now()
-    Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(26.dp), colors = CardDefaults.cardColors(Panel)) {
-        Column(
-            Modifier
-                .fillMaxWidth()
-                .background(Brush.linearGradient(listOf(kind.accent.copy(.16f), Color.Transparent)))
-                .padding(20.dp)
-        ) {
+    Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp), colors = CardDefaults.cardColors(SurfaceRaised), border = BorderStroke(1.dp, Hairline)) {
+        Column(Modifier.fillMaxWidth().padding(20.dp)) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                 Column {
-                    Text(kind.label.uppercase(), color = kind.accent, fontSize = 12.sp, letterSpacing = 1.2.sp, fontWeight = FontWeight.Black)
-                    Text("${formatNumber(kind.total)} KC", fontSize = 30.sp, fontWeight = FontWeight.Black)
+                    Text(kind.label.uppercase(), color = Muted, fontSize = 9.sp, letterSpacing = 1.5.sp, fontWeight = FontWeight.Medium)
+                    Spacer(Modifier.height(5.dp))
+                    Text("${formatNumber(kind.total)} KC", fontSize = 27.sp, fontWeight = FontWeight.Light)
                 }
-                DiamondMark(42.dp)
+                DiamondMark(32.dp, muted = kind == MembershipKind.MONTHLY)
             }
+            Spacer(Modifier.height(18.dp))
+            HorizontalDivider(color = Hairline)
             Spacer(Modifier.height(14.dp))
-            Text("Nhận ngay ${kind.instant} KC", fontWeight = FontWeight.Bold)
-            Text("+ ${kind.daily} KC mỗi ngày × ${kind.days} ngày", color = Muted, fontSize = 13.sp)
-            Spacer(Modifier.height(16.dp))
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                PlanFact("NHẬN NGAY", "${kind.instant} KC")
+                PlanFact("MỖI NGÀY", "+${kind.daily} KC")
+                PlanFact("THỜI HẠN", "${kind.days} ngày")
+            }
+            Spacer(Modifier.height(18.dp))
             if (membership == null) {
                 Button(
                     onClick = { onActivate(kind) },
                     modifier = Modifier.fillMaxWidth(),
-                    colors = ButtonDefaults.buttonColors(containerColor = kind.accent, contentColor = Navy),
+                    colors = ButtonDefaults.buttonColors(containerColor = if (kind == MembershipKind.WEEKLY) Accent else TextPrimary, contentColor = Ink),
                     shape = RoundedCornerShape(14.dp)
-                ) { Text("Kích hoạt theo dõi", fontWeight = FontWeight.Black) }
+                ) { Text("Bắt đầu theo dõi", fontWeight = FontWeight.SemiBold, fontSize = 13.sp) }
             } else {
                 val claimed = membership.hasClaimed(today)
                 val progress = membership.claimedEpochDays.size.toFloat() / kind.days
                 LinearProgressIndicator(
                     progress = { progress.coerceIn(0f, 1f) },
-                    modifier = Modifier.fillMaxWidth().height(7.dp).clip(CircleShape),
-                    color = kind.accent,
-                    trackColor = Color.White.copy(.08f)
+                    modifier = Modifier.fillMaxWidth().height(3.dp).clip(CircleShape),
+                    color = Accent,
+                    trackColor = Hairline
                 )
-                Spacer(Modifier.height(10.dp))
+                Spacer(Modifier.height(12.dp))
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                     Text("Đã nhận ${membership.claimedEpochDays.size}/${kind.days} ngày", color = Muted, fontSize = 12.sp)
                     Button(
                         onClick = { onClaim(membership.id) },
                         enabled = !claimed,
-                        colors = ButtonDefaults.buttonColors(containerColor = kind.accent, contentColor = Navy)
-                    ) { Text(if (claimed) "Hôm nay ✓" else "+${kind.daily} Nhận", fontWeight = FontWeight.Bold) }
+                        colors = ButtonDefaults.buttonColors(containerColor = Accent, contentColor = Ink, disabledContainerColor = SurfaceSoft, disabledContentColor = Muted),
+                        shape = RoundedCornerShape(12.dp)
+                    ) { Text(if (claimed) "Đã nhận" else "+${kind.daily} KC", fontWeight = FontWeight.SemiBold, fontSize = 12.sp) }
                 }
             }
         }
     }
 }
 
+@Composable
+private fun PlanFact(label: String, value: String) {
+    Column {
+        Text(label, color = Muted, fontSize = 8.sp, letterSpacing = .8.sp)
+        Spacer(Modifier.height(4.dp))
+        Text(value, color = TextPrimary, fontSize = 12.sp, fontWeight = FontWeight.Medium)
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun AddEntryDialog(onDismiss: () -> Unit, onSave: (Int, String, String) -> Unit) {
-    var isIncome by remember { mutableStateOf(true) }
+private fun AddEntryDialog(initialIncome: Boolean, onDismiss: () -> Unit, onSave: (Int, String, String) -> Unit) {
+    var isIncome by remember(initialIncome) { mutableStateOf(initialIncome) }
     var amount by remember { mutableStateOf("") }
     var note by remember { mutableStateOf("") }
     val parsed = amount.toIntOrNull()?.takeIf { it > 0 }
@@ -724,13 +757,14 @@ private fun AddEntryDialog(onDismiss: () -> Unit, onSave: (Int, String, String) 
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        containerColor = Panel,
-        title = { Text(if (isIncome) "Ghi nhận KC" else "Ghi chi tiêu", fontWeight = FontWeight.Black) },
+        containerColor = SurfaceRaised,
+        shape = RoundedCornerShape(24.dp),
+        title = { Text(if (isIncome) "Ghi nhận Kim Cương" else "Kim Cương đã chi", fontWeight = FontWeight.Medium, fontSize = 20.sp) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    ToggleButton("+ Nạp / nhận", isIncome, Mint, Modifier.weight(1f)) { isIncome = true }
-                    ToggleButton("− Đã chi", !isIncome, Coral, Modifier.weight(1f)) { isIncome = false }
+                    ToggleButton("Ghi nhận", isIncome, Modifier.weight(1f)) { isIncome = true }
+                    ToggleButton("Đã chi", !isIncome, Modifier.weight(1f)) { isIncome = false }
                 }
                 OutlinedTextField(
                     value = amount,
@@ -764,20 +798,21 @@ private fun AddEntryDialog(onDismiss: () -> Unit, onSave: (Int, String, String) 
                     onSave(signed, if (isIncome) "Nạp / nhận Kim Cương" else "Chi Kim Cương", note)
                 },
                 enabled = parsed != null,
-                colors = ButtonDefaults.buttonColors(containerColor = if (isIncome) Mint else Coral, contentColor = Navy)
-            ) { Text("Lưu", fontWeight = FontWeight.Bold) }
+                colors = ButtonDefaults.buttonColors(containerColor = Accent, contentColor = Ink),
+                shape = RoundedCornerShape(12.dp)
+            ) { Text("Lưu", fontWeight = FontWeight.SemiBold) }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Hủy") } }
     )
 }
 
 @Composable
-private fun ToggleButton(label: String, selected: Boolean, accent: Color, modifier: Modifier, onClick: () -> Unit) {
-    val colors = if (selected) ButtonDefaults.buttonColors(accent, Navy) else ButtonDefaults.outlinedButtonColors(contentColor = Muted)
+private fun ToggleButton(label: String, selected: Boolean, modifier: Modifier, onClick: () -> Unit) {
+    val colors = if (selected) ButtonDefaults.buttonColors(Accent, Ink) else ButtonDefaults.outlinedButtonColors(contentColor = Muted)
     if (selected) {
-        Button(onClick = onClick, modifier = modifier, colors = colors, contentPadding = PaddingValues(horizontal = 6.dp)) { Text(label, fontSize = 12.sp, fontWeight = FontWeight.Bold) }
+        Button(onClick = onClick, modifier = modifier, colors = colors, contentPadding = PaddingValues(horizontal = 6.dp), shape = RoundedCornerShape(12.dp)) { Text(label, fontSize = 12.sp, fontWeight = FontWeight.SemiBold) }
     } else {
-        OutlinedButton(onClick = onClick, modifier = modifier, colors = colors, contentPadding = PaddingValues(horizontal = 6.dp)) { Text(label, fontSize = 12.sp) }
+        OutlinedButton(onClick = onClick, modifier = modifier, colors = colors, border = BorderStroke(1.dp, Hairline), contentPadding = PaddingValues(horizontal = 6.dp), shape = RoundedCornerShape(12.dp)) { Text(label, fontSize = 12.sp) }
     }
 }
 
@@ -787,8 +822,9 @@ private fun GoalDialog(current: Int, onDismiss: () -> Unit, onSave: (Int) -> Uni
     val parsed = value.toIntOrNull()?.takeIf { it > 0 }
     AlertDialog(
         onDismissRequest = onDismiss,
-        containerColor = Panel,
-        title = { Text("Mục tiêu Kim Cương", fontWeight = FontWeight.Black) },
+        containerColor = SurfaceRaised,
+        shape = RoundedCornerShape(24.dp),
+        title = { Text("Mục tiêu Kim Cương", fontWeight = FontWeight.Medium, fontSize = 20.sp) },
         text = {
             OutlinedTextField(
                 value = value,
@@ -800,14 +836,14 @@ private fun GoalDialog(current: Int, onDismiss: () -> Unit, onSave: (Int) -> Uni
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
             )
         },
-        confirmButton = { Button(onClick = { onSave(parsed!!) }, enabled = parsed != null) { Text("Cập nhật") } },
+        confirmButton = { Button(onClick = { onSave(parsed!!) }, enabled = parsed != null, colors = ButtonDefaults.buttonColors(Accent, Ink), shape = RoundedCornerShape(12.dp)) { Text("Cập nhật") } },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Hủy") } }
     )
 }
 
 @Composable
 private fun DiamondMark(size: androidx.compose.ui.unit.Dp, muted: Boolean = false) {
-    val primary = if (muted) Muted.copy(.45f) else Cyan
+    val primary = if (muted) Muted.copy(.55f) else Accent
     Canvas(Modifier.size(size)) {
         val w = this.size.width
         val h = this.size.height
@@ -819,11 +855,56 @@ private fun DiamondMark(size: androidx.compose.ui.unit.Dp, muted: Boolean = fals
             lineTo(w * .50f, h * .90f)
             close()
         }
-        drawPath(diamond, Brush.linearGradient(listOf(primary, if (muted) primary else Gold)))
-        drawPath(diamond, Color.White.copy(.28f), style = Stroke(width = w * .045f))
-        drawLine(Color.White.copy(.45f), Offset(w * .12f, h * .34f), Offset(w * .88f, h * .34f), w * .035f)
-        drawLine(Color.White.copy(.3f), Offset(w * .32f, h * .12f), Offset(w * .50f, h * .90f), w * .03f)
-        drawLine(Color.White.copy(.3f), Offset(w * .68f, h * .12f), Offset(w * .50f, h * .90f), w * .03f)
+        drawPath(diamond, primary.copy(.08f))
+        drawPath(diamond, primary, style = Stroke(width = w * .055f))
+        drawLine(primary.copy(.72f), Offset(w * .12f, h * .34f), Offset(w * .88f, h * .34f), w * .04f)
+        drawLine(primary.copy(.65f), Offset(w * .32f, h * .12f), Offset(w * .50f, h * .90f), w * .035f)
+        drawLine(primary.copy(.65f), Offset(w * .68f, h * .12f), Offset(w * .50f, h * .90f), w * .035f)
+    }
+}
+
+@Composable
+private fun AppLineIcon(icon: LineIcon, color: Color, size: androidx.compose.ui.unit.Dp) {
+    Canvas(Modifier.size(size)) {
+        val w = this.size.width
+        val h = this.size.height
+        val stroke = w * .085f
+        when (icon) {
+            LineIcon.HOME -> {
+                val path = Path().apply {
+                    moveTo(w * .14f, h * .46f)
+                    lineTo(w * .50f, h * .16f)
+                    lineTo(w * .86f, h * .46f)
+                    lineTo(w * .78f, h * .46f)
+                    lineTo(w * .78f, h * .84f)
+                    lineTo(w * .58f, h * .84f)
+                    lineTo(w * .58f, h * .61f)
+                    lineTo(w * .42f, h * .61f)
+                    lineTo(w * .42f, h * .84f)
+                    lineTo(w * .22f, h * .84f)
+                    lineTo(w * .22f, h * .46f)
+                }
+                drawPath(path, color, style = Stroke(stroke, cap = StrokeCap.Round))
+            }
+            LineIcon.HISTORY -> {
+                drawLine(color, Offset(w * .18f, h * .26f), Offset(w * .82f, h * .26f), stroke, StrokeCap.Round)
+                drawLine(color, Offset(w * .18f, h * .50f), Offset(w * .70f, h * .50f), stroke, StrokeCap.Round)
+                drawLine(color, Offset(w * .18f, h * .74f), Offset(w * .58f, h * .74f), stroke, StrokeCap.Round)
+            }
+            LineIcon.CARD -> {
+                drawRoundRect(color, Offset(w * .12f, h * .22f), androidx.compose.ui.geometry.Size(w * .76f, h * .56f), androidx.compose.ui.geometry.CornerRadius(w * .10f), style = Stroke(stroke))
+                drawLine(color, Offset(w * .12f, h * .42f), Offset(w * .88f, h * .42f), stroke)
+            }
+            LineIcon.PLUS -> {
+                drawLine(color, Offset(w * .50f, h * .19f), Offset(w * .50f, h * .81f), stroke, StrokeCap.Round)
+                drawLine(color, Offset(w * .19f, h * .50f), Offset(w * .81f, h * .50f), stroke, StrokeCap.Round)
+            }
+            LineIcon.MINUS -> drawLine(color, Offset(w * .19f, h * .50f), Offset(w * .81f, h * .50f), stroke, StrokeCap.Round)
+            LineIcon.CLOSE -> {
+                drawLine(color, Offset(w * .23f, h * .23f), Offset(w * .77f, h * .77f), stroke, StrokeCap.Round)
+                drawLine(color, Offset(w * .77f, h * .23f), Offset(w * .23f, h * .77f), stroke, StrokeCap.Round)
+            }
+        }
     }
 }
 
